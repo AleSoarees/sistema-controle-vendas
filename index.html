@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<style>
+
+body{
+font-family:Arial;
+background:#f4f4f4;
+padding:20px;
+}
+
+.card{
+
+background:white;
+padding:20px;
+margin:20px;
+border-radius:10px;
+
+}
+
+table{
+
+width:100%;
+border-collapse:collapse;
+
+}
+
+th,td{
+
+border:1px solid #ddd;
+padding:10px;
+text-align:center;
+
+}
+
+input,select,button{
+
+padding:10px;
+margin:5px;
+
+}
+
+button:disabled{
+
+opacity:0.6;
+cursor:not-allowed;
+
+}
+
+.aviso{
+
+font-size:12px;
+color:#666;
+
+}
+
+.filtros{
+
+display:flex;
+flex-wrap:wrap;
+align-items:center;
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>Sistema Controle de Vendas</h1>
+
+
+<div class="card">
+
+<h2>Acesso</h2>
+
+<input type="password" id="pin" placeholder="PIN de acesso">
+
+<p class="aviso">Necessário para cadastrar, vender, editar ou excluir.</p>
+
+</div>
+
+
+<div class="card">
+
+<h2>Dashboard</h2>
+
+<p id="faturamento"></p>
+<p id="vendas"></p>
+<p id="produtos"></p>
+<p id="estoque"></p>
+<p id="mais"></p>
+
+<p class="aviso">📊 O gráfico de vendas por produto fica na aba "Gráfico" da planilha (fora deste site).</p>
+
+</div>
+
+
+
+<div class="card">
+
+<h2>Cadastrar Produto</h2>
+
+<input id="produto" placeholder="Produto">
+
+<input id="categoria" placeholder="Categoria">
+
+<input type="number"
+id="preco"
+placeholder="Preço">
+
+<input type="number"
+id="estoqueInicial"
+placeholder="Estoque">
+
+<button onclick="salvar(event)">
+
+Cadastrar
+
+</button>
+
+</div>
+
+
+
+<div class="card">
+
+<h2>Registrar Venda</h2>
+
+<select id="produtoVenda"></select>
+
+<input
+type="number"
+id="quantidadeVenda"
+placeholder="Quantidade">
+
+<button onclick="vender(event)">
+
+Registrar
+
+</button>
+
+</div>
+
+
+
+<div class="card">
+
+<h2>Atualizar Produto</h2>
+
+<select id="editarProduto"></select>
+
+<input
+id="novoNome"
+placeholder="Novo nome (opcional)">
+
+<input
+id="novaCategoria"
+placeholder="Nova categoria (opcional)">
+
+<input
+type="number"
+id="editarPreco"
+placeholder="Novo preço (opcional)">
+
+<input
+type="number"
+id="quantidadeLote"
+placeholder="Quantidade recebida">
+
+<input
+id="lote"
+placeholder="Lote">
+
+<button onclick="editar(event)">
+
+Atualizar
+
+</button>
+
+</div>
+
+
+
+<div class="card">
+
+<h2>Produtos</h2>
+
+<input id="buscaProduto" placeholder="Buscar por nome ou categoria..." oninput="filtrarProdutos()" style="width:96%">
+
+<table>
+
+<tr>
+
+<th>ID</th>
+<th>Produto</th>
+<th>Categoria</th>
+<th>Preço</th>
+<th>Estoque</th>
+<th>Ação</th>
+
+</tr>
+
+<tbody id="produtosTabela">
+
+</tbody>
+
+</table>
+
+</div>
+
+
+
+<div class="card">
+
+<h2>Histórico de Vendas</h2>
+
+<div class="filtros">
+
+<select id="filtroProdutoVenda" onchange="renderizarVendas()"></select>
+
+<label class="aviso">De: <input type="date" id="filtroDataInicio" onchange="renderizarVendas()"></label>
+
+<label class="aviso">Até: <input type="date" id="filtroDataFim" onchange="renderizarVendas()"></label>
+
+<button onclick="limparFiltroVendas()">Limpar filtro</button>
+
+</div>
+
+<p class="aviso">Sem filtro, mostra as 25 vendas mais recentes. Com filtro ativo, mostra todas as correspondentes.</p>
+
+<table>
+
+<tr>
+
+<th>Produto</th>
+<th>Quantidade</th>
+<th>Total</th>
+<th>Data</th>
+<th>Ação</th>
+
+</tr>
+
+<tbody id="vendasTabela">
+
+</tbody>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h2>Resumo por Produto</h2>
+
+<table>
+
+<tr>
+
+<th>Produto</th>
+<th>Quantidade Vendida</th>
+<th>Valor Arrecadado</th>
+
+</tr>
+
+<tbody id="resumoTabela">
+
+</tbody>
+
+</table>
+
+</div>
+
+
+<div class="card">
+
+<h2>Log de Atividades (últimas 15)</h2>
+
+<table>
+
+<tr>
+
+<th>Data</th>
+<th>Ação</th>
+<th>Produto</th>
+<th>Detalhes</th>
+
+</tr>
+
+<tbody id="logTabela">
+
+</tbody>
+
+</table>
+
+</div>
+
+
+
+<script>
+
+let produtosCache = [];
+let vendasCache = [];
+
+carregarTudo();
+
+function carregarTudo(){
+
+carregarProdutos();
+carregarVendas();
+carregarResumo();
+carregarRelatorio();
+carregarLog();
+
+}
+
+
+// trava o botão clicado pra evitar duplo-clique (causa de IDs duplicados)
+function travarBotao(btn){
+  btn.disabled = true;
+  btn.dataset.textoOriginal = btn.innerText;
+  btn.innerText = "Aguarde...";
+}
+
+function destravarBotao(btn){
+  btn.disabled = false;
+  btn.innerText = btn.dataset.textoOriginal;
+}
+
+// mostra a mensagem do servidor; trata tanto sucesso quanto erro de validação
+function tratarResposta(msg, btn, limpar, recarregar){
+  destravarBotao(btn);
+  alert(msg);
+  if(msg.indexOf("Erro")===-1){
+    limpar();
+    recarregar();
+  }
+}
+
+
+function salvar(evt){
+
+  if(!produto.value.trim() || !categoria.value.trim() || preco.value==="" || estoqueInicial.value===""){
+    alert("Preencha todos os campos antes de cadastrar.");
+    return;
+  }
+
+  var btn = evt.target;
+  travarBotao(btn);
+
+  google.script.run
+  .withSuccessHandler(function(msg){
+    tratarResposta(msg, btn, function(){
+      produto.value="";
+      categoria.value="";
+      preco.value="";
+      estoqueInicial.value="";
+    }, function(){
+      // cadastro de produto não afeta vendas/resumo, recarrega só o necessário
+      carregarProdutos();
+      carregarRelatorio();
+      carregarLog();
+    });
+  })
+  .withFailureHandler(function(erro){
+    destravarBotao(btn);
+    alert("Erro inesperado: " + erro.message);
+  })
+  .adicionarProduto(
+
+  produto.value,
+  categoria.value,
+  preco.value,
+  estoqueInicial.value,
+  pin.value
+
+  );
+
+}
+
+
+function vender(evt){
+
+  if(!produtoVenda.value || produtoVenda.value === "Selecione"){
+    alert("Selecione um produto.");
+    return;
+  }
+
+  var quantidade = Number(quantidadeVenda.value);
+
+  if(!quantidadeVenda.value || quantidade <= 0){
+    alert("Informe uma quantidade válida.");
+    return;
+  }
+
+  var produtoInfo = produtosCache.find(function(p){ return p[1] === produtoVenda.value; });
+
+  if(produtoInfo){
+
+    var precoUnit = Number(produtoInfo[3]);
+    var estoqueAtual = Number(produtoInfo[4]);
+    var total = precoUnit * quantidade;
+
+    if(quantidade > estoqueAtual){
+      alert("Estoque insuficiente. Disponível: " + estoqueAtual);
+      return;
+    }
+
+    var mensagem = "Confirmar venda de " + quantidade + "x " + produtoVenda.value + " = R$ " + total.toFixed(2) + "?";
+
+    if((estoqueAtual - quantidade) < 5){
+      mensagem += "\n\n⚠️ Atenção: o estoque deste produto ficará baixo (" + (estoqueAtual - quantidade) + " unidades).";
+    }
+
+    if(!confirm(mensagem)){
+      return;
+    }
+
+  }
+
+  var btn = evt.target;
+  travarBotao(btn);
+
+  google.script.run
+  .withSuccessHandler(function(msg){
+    tratarResposta(msg, btn, function(){
+      quantidadeVenda.value="";
+    }, carregarTudo);
+  })
+  .withFailureHandler(function(erro){
+    destravarBotao(btn);
+    alert("Erro inesperado: " + erro.message);
+  })
+  .registrarVenda(
+
+  produtoVenda.value,
+  quantidadeVenda.value,
+  pin.value
+
+  );
+
+}
+
+function editar(evt){
+
+  if(!editarProduto.value || editarProduto.value === "Selecione"){
+    alert("Selecione um produto.");
+    return;
+  }
+
+  var btn = evt.target;
+  travarBotao(btn);
+
+  google.script.run
+  .withSuccessHandler(function(msg){
+    tratarResposta(msg, btn, function(){
+      novoNome.value="";
+      novaCategoria.value="";
+      editarPreco.value="";
+      quantidadeLote.value="";
+      lote.value="";
+    }, carregarTudo);
+  })
+  .withFailureHandler(function(erro){
+    destravarBotao(btn);
+    alert("Erro inesperado: " + erro.message);
+  })
+  .atualizarProduto(
+
+  editarProduto.value,
+  novoNome.value,
+  novaCategoria.value,
+  editarPreco.value,
+  quantidadeLote.value,
+  lote.value,
+  pin.value
+
+  );
+
+}
+
+function excluirVenda(id){
+
+if(!confirm("Excluir esta venda? O estoque do produto será devolvido.")){
+return;
+}
+
+google.script.run
+.withSuccessHandler(function(msg){
+alert(msg);
+carregarTudo();
+})
+.withFailureHandler(function(erro){
+alert("Erro inesperado: " + erro.message);
+})
+.excluirVenda(id, pin.value);
+
+}
+
+function excluirProduto(produto){
+
+if(!confirm("Excluir o produto \"" + produto + "\"? O histórico de vendas já registrado não será apagado.")){
+return;
+}
+
+google.script.run
+.withSuccessHandler(function(msg){
+alert(msg);
+// exclusão de produto não afeta vendas/resumo, recarrega só o necessário
+carregarProdutos();
+carregarRelatorio();
+carregarLog();
+})
+.withFailureHandler(function(erro){
+alert("Erro inesperado: " + erro.message);
+})
+.excluirProduto(produto, pin.value);
+
+}
+
+
+
+function popularSelects(dados){
+
+let select = "<option>Selecione</option>";
+let selectFiltro = "<option value=\"Todos\">Todos os produtos</option>";
+
+dados.forEach(item=>{
+
+select += `<option value="${item[1]}">${item[1]}</option>`;
+selectFiltro += `<option value="${item[1]}">${item[1]}</option>`;
+
+});
+
+produtoVenda.innerHTML = select;
+editarProduto.innerHTML = select;
+filtroProdutoVenda.innerHTML = selectFiltro;
+
+}
+
+
+function renderizarProdutos(dados){
+
+let tabela="";
+
+dados.forEach(item=>{
+
+let estoqueBaixo = Number(item[4]) < 5;
+let estilo = estoqueBaixo ? ' style="background:#ffdddd"' : '';
+
+tabela+=`
+
+<tr${estilo}>
+
+<td>${item[0]}</td>
+<td>${item[1]}</td>
+<td>${item[2]}</td>
+<td>R$ ${Number(item[3]).toFixed(2)}</td>
+<td>${item[4]}</td>
+<td><button onclick="excluirProduto('${item[1].toString().replace(/'/g,"\\'")}')">Excluir</button></td>
+
+</tr>
+
+`;
+
+});
+
+produtosTabela.innerHTML=tabela;
+
+}
+
+
+function filtrarProdutos(){
+
+let termo = buscaProduto.value.toLowerCase();
+
+let filtrado = produtosCache.filter(function(p){
+  return p[1].toString().toLowerCase().includes(termo) || p[2].toString().toLowerCase().includes(termo);
+});
+
+renderizarProdutos(filtrado);
+
+}
+
+
+function carregarProdutos(){
+
+google.script.run
+.withSuccessHandler(function(dados){
+
+produtosCache = dados;
+
+popularSelects(dados);
+
+if(buscaProduto.value){
+  filtrarProdutos();
+} else {
+  renderizarProdutos(dados);
+}
+
+})
+.withFailureHandler(function(erro){
+console.error("Erro ao listar produtos:", erro);
+})
+.listarProdutos();
+
+}
+
+
+
+function renderizarVendas(){
+
+let dados = vendasCache.slice();
+
+let produtoSelecionado = filtroProdutoVenda.value;
+
+if(produtoSelecionado && produtoSelecionado !== "Todos"){
+  dados = dados.filter(function(item){ return item[1] === produtoSelecionado; });
+}
+
+let dataInicio = filtroDataInicio.value;
+let dataFim = filtroDataFim.value;
+
+if(dataInicio){
+  dados = dados.filter(function(item){
+    return new Date(item[4]) >= new Date(dataInicio + "T00:00:00");
+  });
+}
+
+if(dataFim){
+  dados = dados.filter(function(item){
+    return new Date(item[4]) <= new Date(dataFim + "T23:59:59");
+  });
+}
+
+dados.reverse();
+
+let semFiltro = (!produtoSelecionado || produtoSelecionado==="Todos") && !dataInicio && !dataFim;
+
+if(semFiltro){
+  dados = dados.slice(0,25);
+}
+
+let tabela="";
+
+dados.forEach(item=>{
+
+tabela+=`
+
+<tr>
+
+<td>${item[1]}</td>
+<td>${item[2]}</td>
+<td>R$ ${Number(item[3]).toFixed(2)}</td>
+<td>${new Date(item[4]).toLocaleDateString("pt-BR")}</td>
+<td><button onclick="excluirVenda(${item[0]})">Excluir</button></td>
+
+</tr>
+
+`;
+
+});
+
+vendasTabela.innerHTML=tabela;
+
+}
+
+
+function limparFiltroVendas(){
+  filtroProdutoVenda.value = "Todos";
+  filtroDataInicio.value = "";
+  filtroDataFim.value = "";
+  renderizarVendas();
+}
+
+
+function carregarVendas(){
+
+google.script.run
+.withSuccessHandler(function(dados){
+
+vendasCache = dados;
+renderizarVendas();
+
+})
+.withFailureHandler(function(erro){
+console.error("Erro ao listar vendas:", erro);
+})
+.listarVendas();
+
+}
+
+
+
+function carregarResumo(){
+
+google.script.run
+.withSuccessHandler(function(dados){
+
+let tabela="";
+
+for(let produto in dados){
+
+tabela+=`
+
+<tr>
+
+<td>${produto}</td>
+<td>${dados[produto].quantidade}</td>
+<td>R$ ${dados[produto].valor.toFixed(2)}</td>
+
+</tr>
+
+`;
+
+}
+
+resumoTabela.innerHTML=tabela;
+
+})
+.withFailureHandler(function(erro){
+console.error("Erro ao montar resumo:", erro);
+})
+.resumoProdutosVendidos();
+
+}
+
+
+
+function carregarRelatorio(){
+
+google.script.run
+.withSuccessHandler(function(dados){
+
+faturamento.innerHTML=
+"💰 Faturamento: R$ "+
+dados.faturamento.toFixed(2);
+
+vendas.innerHTML=
+"🛒 Vendas: "+
+dados.vendas;
+
+produtos.innerHTML=
+"📦 Produtos: "+
+dados.produtos;
+
+estoque.innerHTML=
+"📉 Estoque baixo: "+
+dados.estoqueBaixo;
+
+mais.innerHTML=
+"⭐ Mais vendido: "+
+dados.produtoMais;
+
+})
+.withFailureHandler(function(erro){
+console.error("Erro ao gerar relatório:", erro);
+})
+.gerarRelatorio();
+
+}
+
+
+function carregarLog(){
+
+google.script.run
+.withSuccessHandler(function(dados){
+
+let tabela="";
+
+dados.forEach(item=>{
+
+tabela+=`
+
+<tr>
+
+<td>${new Date(item[0]).toLocaleString("pt-BR")}</td>
+<td>${item[1]}</td>
+<td>${item[2]}</td>
+<td>${item[3]}</td>
+
+</tr>
+
+`;
+
+});
+
+logTabela.innerHTML=tabela;
+
+})
+.withFailureHandler(function(erro){
+console.error("Erro ao listar log:", erro);
+})
+.listarLog();
+
+}
+
+</script>
+
+</body>
+
+</html>
